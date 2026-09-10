@@ -1,4 +1,5 @@
 name: nf-core linting
+run-name: "nf-core linting ${{ inputs.leg || github.event_name }} ${{ inputs.racecar_run }}"
 # This workflow is triggered on pushes and PRs to the repository.
 # It runs the `nf-core pipelines lint` and markdown lint tests to ensure
 # that the code meets the nf-core guidelines.
@@ -7,8 +8,27 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: baseline
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
+
+env:
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
 jobs:
   pre-commit:
+    if: false   # racecar: scan/report job, not a build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -50,6 +70,7 @@ jobs:
           pip install nf-core==${{ steps.read_yml.outputs['nf_core_version'] }}
 
       - name: Run nf-core pipelines lint
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         if: ${{ github.base_ref != 'master' }}
         env:
           GITHUB_COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
@@ -58,6 +79,7 @@ jobs:
         run: nf-core -l lint_log.txt pipelines lint --dir ${GITHUB_WORKSPACE} --markdown lint_results.md
 
       - name: Run nf-core pipelines lint --release
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         if: ${{ github.base_ref == 'master' }}
         env:
           GITHUB_COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
@@ -81,6 +103,7 @@ jobs:
 
       # Build a comment for the shared pr-comment.yml poster to publish on the PR
       - name: Prepare PR comment
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         if: ${{ always() }}
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
